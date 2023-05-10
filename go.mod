@@ -2,7 +2,10 @@ module HamzaMasood1/cooking-app
 
 go 1.20
 
-require github.com/gin-gonic/gin v1.9.0
+require (
+	github.com/gin-gonic/gin v1.9.0
+	github.com/rs/xid v1.5.0
+)
 
 require (
 	github.com/bytedance/sonic v1.8.0 // indirect
