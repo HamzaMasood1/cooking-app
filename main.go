@@ -24,7 +24,7 @@ var recipes []Recipe
 func init() {
 	recipes = make([]Recipe, 0)
 	file, _ := ioutil.ReadFile("recipes.json")
-	_ = json.Unmarshal([]byte(file), &recipes)
+	_ = json.Unmarshal(file, &recipes)
 }
 
 func NewRecipeHandler(c *gin.Context) {
