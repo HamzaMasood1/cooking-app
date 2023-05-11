@@ -2,4 +2,7 @@
 docker run -d --name mongodb –v /home/data:/data/db -e MONGO_INITDB_ROOT_USERNAME=admin -e MONGO_INITDB_ROOT_PASSWORD=password -p 27017:27017 mongo:4.4.3
 
 //env variable before running main.go
-MONGO_URI="mongodb://admin:password@localhost:27017/test?authSource=admin" go run main.go
+MONGO_URI="mongodb://admin:password@localhost:27017/test?authSource=admin" MONGO_DATABASE=demo go run main.go
+
+//importing data to mongodb through cmd
+mongoimport --username admin --password password --authenticationDatabase admin --db demo --collection recipes --file recipes.json --jsonArray
