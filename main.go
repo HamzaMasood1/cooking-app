@@ -1,12 +1,9 @@
 // Recipes API
 //
-// This is a sample recipes API. You can find out more about the API at https://github.com/PacktPublishing/Building-Distributed-Applications-in-Gin.
-//
 //		Schemes: http
 //	 Host: localhost:8080
 //		BasePath: /
 //		Version: 1.0.0
-//		Contact: Mohamed Labouardy <mohamed@labouardy.com> https://labouardy.com
 //
 //		Consumes:
 //		- application/json
@@ -28,7 +25,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/rs/xid"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
@@ -61,16 +59,16 @@ func init() {
 		log.Fatal(err)
 	}
 	log.Println("Connected to MongoDB")
-	var listOfRecipes []interface{}
-	for _, recipe := range recipes {
-		listOfRecipes = append(listOfRecipes, recipe)
-	}
-	collection := client.Database(os.Getenv("MONGO_DATABASE")).Collection("recipes")
-	insertManyResult, err := collection.InsertMany(ctx, listOfRecipes)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Println("Inserted recipes: ", len(insertManyResult.InsertedIDs))
+	// var listOfRecipes []interface{}
+	// for _, recipe := range recipes {
+	// 	listOfRecipes = append(listOfRecipes, recipe)
+	// }
+	// collection := client.Database(os.Getenv("MONGO_DATABASE")).Collection("recipes")
+	// insertManyResult, err := collection.InsertMany(ctx, listOfRecipes)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+	// log.Println("Inserted recipes: ", len(insertManyResult.InsertedIDs))
 }
 
 // swagger:operation POST /recipes recipes newRecipe
@@ -91,7 +89,7 @@ func NewRecipeHandler(c *gin.Context) {
 			"error": err.Error()})
 		return
 	}
-	recipe.ID = xid.New().String()
+	recipe.ID = primitive.NewObjectID().String()
 	recipe.PublishedAt = time.Now()
 	recipes = append(recipes, recipe)
 	c.JSON(http.StatusOK, recipe)
@@ -107,6 +105,20 @@ func NewRecipeHandler(c *gin.Context) {
 //	'200':
 //	    description: Successful operation
 func ListRecipesHandler(c *gin.Context) {
+	collection := client.Database(os.Getenv("MONGO_DATABASE")).Collection("recipes")
+	cur, err := collection.Find(ctx, bson.M{})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"errro": err.Error()})
+		return
+	}
+	defer cur.Close(ctx)
+	recipes := make([]Recipe, 0)
+
+	for cur.Next(ctx) {
+		var recipe Recipe
+		cur.Decode(&recipe)
+		recipes = append(recipes, recipe)
+	}
 	c.JSON(http.StatusOK, recipes)
 }
 
