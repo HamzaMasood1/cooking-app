@@ -17,6 +17,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -83,15 +84,21 @@ func init() {
 //	'400':
 //	    description: Invalid input
 func NewRecipeHandler(c *gin.Context) {
+	var collection = client.Database(os.Getenv("MONGO_DATABASE")).Collection("recipes")
 	var recipe Recipe
 	if err := c.ShouldBindJSON(&recipe); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error()})
 		return
 	}
-	recipe.ID = primitive.NewObjectID().String()
+	recipe.ID = primitive.NewObjectID().Hex()
 	recipe.PublishedAt = time.Now()
-	recipes = append(recipes, recipe)
+	_, err = collection.InsertOne(ctx, recipe)
+	if err != nil {
+		fmt.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error while Inserting a new recipe"})
+		return
+	}
 	c.JSON(http.StatusOK, recipe)
 }
 
@@ -105,7 +112,7 @@ func NewRecipeHandler(c *gin.Context) {
 //	'200':
 //	    description: Successful operation
 func ListRecipesHandler(c *gin.Context) {
-	collection := client.Database(os.Getenv("MONGO_DATABASE")).Collection("recipes")
+	var collection = client.Database(os.Getenv("MONGO_DATABASE")).Collection("recipes")
 	cur, err := collection.Find(ctx, bson.M{})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"errro": err.Error()})
@@ -143,6 +150,7 @@ func ListRecipesHandler(c *gin.Context) {
 //	'404':
 //	    description: Invalid recipe ID
 func UpdateRecipeHandler(c *gin.Context) {
+	var collection = client.Database(os.Getenv("MONGO_DATABASE")).Collection("recipes")
 	id := c.Param("id")
 	var recipe Recipe
 	if err := c.ShouldBindJSON(&recipe); err != nil {
@@ -150,21 +158,22 @@ func UpdateRecipeHandler(c *gin.Context) {
 			"error": err.Error()})
 		return
 	}
-	index := -1
-	for i := 0; i < len(recipes); i++ {
-		if recipes[i].ID == id {
-			index = i
-			break
-		}
-	}
-	if index == -1 {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error": "Recipe not found"})
+
+	objectId, _ := primitive.ObjectIDFromHex(id)
+	_, err = collection.UpdateOne(ctx, bson.M{"_id": objectId}, bson.D{{"$set", bson.D{
+		{"name", recipe.Name},
+		{"instructions", recipe.Instructions},
+		{"ingredients", recipe.Ingredients},
+		{"tags", recipe.Tags},
+	}}})
+
+	if err != nil {
+		fmt.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	recipes[index] = recipe
-	recipes[index].ID = id
-	c.JSON(http.StatusOK, recipes[index])
+
+	c.JSON(http.StatusOK, gin.H{"message": "Recipe has been updated"})
 }
 
 // swagger:operation DELETE /recipes/{id} recipes deleteRecipe
