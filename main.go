@@ -22,7 +22,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -43,8 +42,6 @@ type Recipe struct {
 	PublishedAt  time.Time `json:"publishedAt"`
 }
 
-var recipes []Recipe
-
 var ctx context.Context
 var err error
 var client *mongo.Client
@@ -59,17 +56,17 @@ func init() {
 		log.Fatal(err)
 	}
 	log.Println("Connected to MongoDB")
-	var listOfRecipes []interface{}
-	for _, recipe := range recipes {
-		listOfRecipes = append(listOfRecipes, recipe)
-	}
-	collection := client.Database(os.Getenv("MONGO_DATABASE")).Collection("recipes")
-	insertManyResult, err := collection.InsertMany(ctx, listOfRecipes)
-	if err != nil {
-		log.Fatal(err)
-	}
+	// var listOfRecipes []interface{}
+	// for _, recipe := range recipes {
+	// 	listOfRecipes = append(listOfRecipes, recipe)
+	// }
+	// collection := client.Database(os.Getenv("MONGO_DATABASE")).Collection("recipes")
+	// insertManyResult, err := collection.InsertMany(ctx, listOfRecipes)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 
-	log.Println("Inserted recipes: ", insertManyResult.InsertedIDs)
+	// log.Println("Inserted recipes: ", insertManyResult.InsertedIDs)
 }
 
 // swagger:operation POST /recipes recipes newRecipe
@@ -92,6 +89,7 @@ func NewRecipeHandler(c *gin.Context) {
 		return
 	}
 	recipe.PublishedAt = time.Now()
+	recipe.ID = primitive.NewObjectID().Hex()
 	_, err := collection.InsertOne(ctx, recipe)
 	if err != nil {
 		fmt.Println(err)
@@ -158,8 +156,7 @@ func UpdateRecipeHandler(c *gin.Context) {
 		return
 	}
 
-	objectId, _ := primitive.ObjectIDFromHex(id)
-	_, err = collection.UpdateOne(ctx, bson.M{"_id": objectId}, bson.D{{"$set", bson.D{
+	_, err = collection.UpdateOne(ctx, bson.M{"_id": id}, bson.D{{"$set", bson.D{
 		{"name", recipe.Name},
 		{"instructions", recipe.Instructions},
 		{"ingredients", recipe.Ingredients},
@@ -229,19 +226,33 @@ func UpdateRecipeHandler(c *gin.Context) {
 //	    description: Successful operation
 func SearchRecipeHandler(c *gin.Context) {
 	tag := c.Query("tag")
-	listOfRecipes := make([]Recipe, 0)
-	for i := 0; i < len(recipes); i++ {
-		found := false
-		for _, t := range recipes[i].Tags {
-			if strings.EqualFold(t, tag) {
-				found = true
-			}
-		}
-		if found {
-			listOfRecipes = append(listOfRecipes, recipes[i])
-		}
+	var collection = client.Database(os.Getenv("MONGO_DATABASE")).Collection("recipes")
+	cur, err := collection.Find(ctx, bson.M{"tags": tag})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"errro": err.Error()})
+		return
 	}
-	c.JSON(http.StatusOK, listOfRecipes)
+	defer cur.Close(ctx)
+	recipes := make([]Recipe, 0)
+
+	for cur.Next(ctx) {
+		var recipe Recipe
+		cur.Decode(&recipe)
+		recipes = append(recipes, recipe)
+	}
+	// listOfRecipes := make([]Recipe, 0)
+	// for i := 0; i < len(recipes); i++ {
+	// 	found := false
+	// 	for _, t := range recipes[i].Tags {
+	// 		if strings.EqualFold(t, tag) {
+	// 			found = true
+	// 		}
+	// 	}
+	// 	if found {
+	// 		listOfRecipes = append(listOfRecipes, recipes[i])
+	// 	}
+	// }
+	c.JSON(http.StatusOK, recipes)
 }
 func main() {
 	router := gin.Default()
