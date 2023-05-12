@@ -256,6 +256,7 @@ func GetOneRecipeHandler(c *gin.Context) {
 
 func main() {
 	router := gin.Default()
+	router.Run("localhost:8080")
 	router.POST("/recipes", NewRecipeHandler)
 	router.GET("/recipes", ListRecipesHandler)
 	router.GET("/recipes/search", SearchRecipeHandler)
