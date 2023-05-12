@@ -238,11 +238,28 @@ func SearchRecipeHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, recipes)
 }
 
+func GetOneRecipeHandler(c *gin.Context) {
+	id := c.Param("id")
+	var collection = client.Database(os.Getenv("MONGO_DATABASE")).Collection("recipes")
+	cur := collection.FindOne(ctx, bson.M{
+		"_id": id,
+	})
+	var recipe Recipe
+	err := cur.Decode(&recipe)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, recipe)
+}
+
 func main() {
 	router := gin.Default()
 	router.POST("/recipes", NewRecipeHandler)
 	router.GET("/recipes", ListRecipesHandler)
 	router.GET("/recipes/search", SearchRecipeHandler)
+	router.GET("/recipes/:id", GetOneRecipeHandler)
 	router.PUT("/recipes/:id", UpdateRecipeHandler)
 	router.DELETE("recipes/:id", DeleteRecipeHandler)
 	router.Run()
