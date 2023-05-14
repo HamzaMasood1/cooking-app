@@ -33,6 +33,7 @@ import (
 
 var err error
 var recipesHandler *handlers.RecipesHandler
+var authHandler *handlers.AuthHandler
 
 func init() {
 	var client *mongo.Client
@@ -71,23 +72,20 @@ func init() {
 	})
 	status := redisClient.Ping()
 	fmt.Println(status)
-	recipesHandler = handlers.NewRecipesHandler(ctx, collection, redisClient)
-}
 
-func AuthMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		if c.GetHeader("X_API_KEY") != os.Getenv("X_API_KEY") {
-			c.AbortWithStatusJSON(401, gin.H{"error": "API key not provided or invalid"})
-		}
-		c.Next()
-	}
+	//--recipes handler
+	recipesHandler = handlers.NewRecipesHandler(ctx, collection, redisClient)
+
+	//--jwt handler
+	authHandler = &handlers.AuthHandler{}
 }
 
 func main() {
 	router := gin.Default()
-	authorized := router.Group("/")
-	authorized.Use(AuthMiddleware())
 	router.GET("/recipes", recipesHandler.ListRecipesHandler)
+	router.POST("/signin", authHandler.SignInHandler)
+	authorized := router.Group("/")
+	authorized.Use(handlers.AuthMiddleware())
 	{
 		authorized.POST("/recipes", recipesHandler.NewRecipeHandler)
 		authorized.GET("/recipes/search", recipesHandler.SearchRecipeHandler)
