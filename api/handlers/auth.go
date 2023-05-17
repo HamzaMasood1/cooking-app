@@ -86,11 +86,18 @@ func (handler *AuthHandler) SignInHandler(c *gin.Context) {
 	session.Set("token", sessionToken)
 	session.Save()
 
-	c.JSON(http.StatusOK, jwtOutput)
+	c.JSON(http.StatusOK, gin.H{"cookie-session": "created", "jwtOuutput": jwtOutput})
 }
 func Verify(hashed, password string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hashed), []byte(password))
 	return err == nil
+}
+
+func (handler *AuthHandler) SignOutHandler(c *gin.Context) {
+	session := sessions.Default(c)
+	session.Clear()
+	session.Save()
+	c.JSON(http.StatusOK, gin.H{"message": "Signed out..."})
 }
 
 func (handler *AuthHandler) RefreshHandler(c *gin.Context) {
