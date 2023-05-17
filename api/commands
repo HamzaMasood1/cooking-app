@@ -1,8 +1,11 @@
-//running mongodb
-docker run -d --name mongodb –v /home/data:/data/db -e MONGO_INITDB_ROOT_USERNAME=admin -e MONGO_INITDB_ROOT_PASSWORD=password -p 27017:27017 mongo:4.4.3
-
-//env variable before running main.go
-MONGO_URI="mongodb://admin:password@localhost:27017/test?authSource=admin" MONGO_DATABASE=demo go run main.go
+//running mongodb docker
+docker run -d --name mongodb -e MONGO_INITDB_ROOT_USERNAME=admin -e MONGO_INITDB_ROOT_PASSWORD=password -p 27017:27017 mongo:4.4.3
 
 //importing data to mongodb through cmd
 mongoimport --username admin --password password --authenticationDatabase admin --db demo --collection recipes --file recipes.json --jsonArray
+
+//env variable before running main.go and run project with air
+MONGO_URI="mongodb://admin:password@localhost:27017/test?authSource=admin" MONGO_DATABASE=demo X_API_KEY=123 JWT_SECRET="eUbP9shywUygMx7u" air
+
+//run redis container on docker
+docker run -d --name redis -p 6379:6379 redis:6.0

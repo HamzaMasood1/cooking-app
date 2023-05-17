@@ -7,8 +7,10 @@ import (
 	"os"
 	"time"
 
+	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt"
+	"github.com/rs/xid"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/crypto/bcrypt"
@@ -78,6 +80,12 @@ func (handler *AuthHandler) SignInHandler(c *gin.Context) {
 		Expires: expirationTime,
 	}
 
+	sessionToken := xid.New().String()
+	session := sessions.Default(c)
+	session.Set("username", user.Username)
+	session.Set("token", sessionToken)
+	session.Save()
+
 	c.JSON(http.StatusOK, jwtOutput)
 }
 func Verify(hashed, password string) bool {
@@ -124,21 +132,34 @@ func (handler *AuthHandler) RefreshHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, jwtOutput)
 }
 
-func AuthMiddleware() gin.HandlerFunc {
+func (handler *AuthHandler) AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		////////////auth with api token
 		// if c.GetHeader("X_API_KEY") != os.Getenv("X_API_KEY") {
 		// 	c.AbortWithStatusJSON(401, gin.H{"error": "API key not provided or invalid"})
 		// }
 		// c.Next()
+		////////////
 		tokenValue := c.GetHeader("Authorization")
-		claims := &Claims{}
-		tkn, err := jwt.ParseWithClaims(tokenValue, claims,
-			func(token *jwt.Token) (interface{}, error) {
-				return []byte(os.Getenv("JWT_SECRET")), nil
-			})
-		if err != nil || tkn == nil || !tkn.Valid {
-			c.AbortWithStatusJSON(401, gin.H{"error": "API key not provided or invalid"})
+		if tokenValue == "" {
+			session := sessions.Default(c)
+			sessionToken := session.Get("token")
+			if sessionToken == nil {
+				c.JSON(http.StatusForbidden, gin.H{"message": "not logged"})
+				c.Abort()
+			}
+			c.Next()
+		} else {
+			claims := &Claims{}
+			tkn, err := jwt.ParseWithClaims(tokenValue, claims,
+				func(token *jwt.Token) (interface{}, error) {
+					return []byte(os.Getenv("JWT_SECRET")), nil
+				})
+			if err != nil || tkn == nil || !tkn.Valid {
+				c.AbortWithStatusJSON(401, gin.H{"error": "API key not provided or invalid"})
+			}
+			c.Next()
 		}
-		c.Next()
+
 	}
 }
