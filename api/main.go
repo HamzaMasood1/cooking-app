@@ -28,6 +28,7 @@ import (
 	redisStore "github.com/gin-contrib/sessions/redis"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis"
+	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
@@ -38,6 +39,7 @@ var recipesHandler *handlers.RecipesHandler
 var authHandler *handlers.AuthHandler
 
 func init() {
+	godotenv.Load()
 	var client *mongo.Client
 	var ctx context.Context
 	// --connecting to the database

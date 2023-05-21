@@ -3,10 +3,15 @@ package handlers
 import (
 	"HamzaMasood1/cooking-app/api/models"
 	"context"
+	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"time"
 
+	jwtmiddleware "github.com/auth0/go-jwt-middleware/v2"
+	"github.com/auth0/go-jwt-middleware/v2/jwks"
+	"github.com/auth0/go-jwt-middleware/v2/validator"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt"
@@ -139,6 +144,17 @@ func (handler *AuthHandler) RefreshHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, jwtOutput)
 }
 
+// CustomClaims contains custom data we want from the token.
+type CustomClaims struct {
+	Scope string `json:"scope"`
+}
+
+// Validate does nothing for this example, but we need
+// it to satisfy validator.CustomClaims interface.
+func (c CustomClaims) Validate(ctx context.Context) error {
+	return nil
+}
+
 func (handler *AuthHandler) AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		////////////auth with api token
@@ -157,15 +173,60 @@ func (handler *AuthHandler) AuthMiddleware() gin.HandlerFunc {
 			}
 			c.Next()
 		} else {
-			claims := &Claims{}
-			tkn, err := jwt.ParseWithClaims(tokenValue, claims,
-				func(token *jwt.Token) (interface{}, error) {
-					return []byte(os.Getenv("JWT_SECRET")), nil
-				})
-			if err != nil || tkn == nil || !tkn.Valid {
-				c.AbortWithStatusJSON(401, gin.H{"error": "API key not provided or invalid"})
+			///////////////local jwt validation
+			// claims := &Claims{}
+			// tkn, err := jwt.ParseWithClaims(tokenValue, claims,
+			// 	func(token *jwt.Token) (interface{}, error) {
+			// 		return []byte(os.Getenv("JWT_SECRET")), nil
+			// 	})
+			// if err != nil || tkn == nil || !tkn.Valid {
+			// 	c.AbortWithStatusJSON(401, gin.H{"error": "API key not provided or invalid"})
+			// }
+			// c.Next()
+			// Set up the validator.
+
+			//////////////////auth0 validation
+			issuerURL, _ := url.Parse("https://" + os.Getenv("AUTH0_DOMAIN") + "/")
+			provider := jwks.NewCachingProvider(issuerURL, 5*time.Minute)
+			jwtValidator, err := validator.New(
+				provider.KeyFunc,
+				validator.RS256,
+				issuerURL.String(),
+				[]string{os.Getenv("AUTH0_AUDIENCE")},
+				validator.WithCustomClaims(
+					func() validator.CustomClaims {
+						return &CustomClaims{}
+					},
+				),
+				validator.WithAllowedClockSkew(30*time.Second),
+			)
+			if err != nil {
+				log.Fatalf("failed to set up the validator: %v", err)
 			}
-			c.Next()
+
+			errorHandler := func(w http.ResponseWriter, r *http.Request, err error) {
+				log.Printf("Encountered error while validating JWT: %v", err)
+			}
+
+			middleware := jwtmiddleware.New(
+				jwtValidator.ValidateToken,
+				jwtmiddleware.WithErrorHandler(errorHandler),
+			)
+			encounteredError := true
+			var handler http.HandlerFunc = func(w http.ResponseWriter, r *http.Request) {
+				encounteredError = false
+				c.Request = r
+				c.Next()
+			}
+
+			middleware.CheckJWT(handler).ServeHTTP(c.Writer, c.Request)
+
+			if encounteredError {
+				c.AbortWithStatusJSON(
+					http.StatusUnauthorized,
+					map[string]string{"message": "JWT is invalid."},
+				)
+			}
 		}
 
 	}
